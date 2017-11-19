@@ -1,5 +1,6 @@
 import os
 import tensorflow as tf
+import numpy as np
 
 # ============================================================================================================ #
 # General Flags
@@ -11,16 +12,16 @@ tf.app.flags.DEFINE_integer(
     'ckpt', 0,
     'Restore model from the checkpoint, 0 - restore from the latest one or from scratch if no ckpts.')
 tf.app.flags.DEFINE_integer(
-    'num_epochs', 1,
+    'num_epochs', 90,
     'Number of training epochs.')
 tf.app.flags.DEFINE_string(
     'trunk', 'net_2',
-    'Name of the network\'s trunk, one of "net_1", "net_2", "net_3", "resnet20".')
+    'Name of the network\'s trunk, one of "net_1", "net_2", "resnet20".')
 tf.app.flags.DEFINE_integer(
     'train_batch_size', 128,
     'Mini-batch size')
 tf.app.flags.DEFINE_float(
-    'keep_prob', 1.0,
+    'keep_prob', 0.75,
     'Probability for a neuron to be opened in a dropout layers.')
 tf.app.flags.DEFINE_integer(
     'eval_train_batch_size', 500,
@@ -35,7 +36,7 @@ tf.app.flags.DEFINE_integer(
     'eval_test_size', 2000,
     'Size of the data using for evaluation model\'s performance on the test set.')
 tf.app.flags.DEFINE_integer(
-    'save_freq', 50,
+    'save_freq', 1,
     'Save model\'s parameters every n iterations.')
 tf.app.flags.DEFINE_integer(
     'eval_freq', 0,
@@ -69,10 +70,10 @@ tf.app.flags.DEFINE_string(
 # Optimization Flags
 # ============================================================================================================ #
 tf.app.flags.DEFINE_float(
-    'weight_decay', 0.0,
+    'weight_decay', 0.004,
     'The weight decay on the model weights.')
 tf.app.flags.DEFINE_string(
-    'optimizer', 'adam',
+    'optimizer', 'momentum',
     'Name of the optimizer, one of "sgd", "momentum", "adam".')
 tf.app.flags.DEFINE_float(
     'momentum', 0.9,
@@ -130,8 +131,10 @@ tf.app.flags.DEFINE_integer(
 
 FLAGS = tf.app.flags.FLAGS
 
-# I want to train with only full batches (othervise there is a problem with queue when I fetch the last batch)
-FLAGS.num_batches_train = int(FLAGS.train_size / FLAGS.train_batch_size)
+# I want to train with only full batches
+FLAGS.num_batches_train = int(np.ceil(FLAGS.train_size / FLAGS.train_batch_size))
+FLAGS.num_batches_eval_train = int(np.ceil(FLAGS.eval_train_size / FLAGS.eval_train_batch_size))
+FLAGS.num_batches_eval_test = int(np.ceil(FLAGS.eval_test_size // FLAGS.eval_test_batch_size))
 
 FLAGS.root_dir = os.getcwd()
 FLAGS.tfrecords_dir = os.path.join(FLAGS.root_dir, 'tfrecords')

@@ -48,31 +48,53 @@ class CifarNeuralNet(object):
                 raise ValueError('No ckpt {} exists in {}'.format(FLAGS.ckpt, FLAGS.ckpt_dir))
 
     def train(self, sess):
-        for epoch in range(FLAGS.num_epochs):
+        for epoch in range(FLAGS.ckpt + 1, FLAGS.ckpt + 1 + FLAGS.num_epochs):
             sess.run(self.iterator.initializer, {self.filename: ['tfrecords/train.tfrecords'],
                                                  self.batch_size: FLAGS.train_batch_size,
                                                  self.augment: True})
-            for _ in tqdm(range(FLAGS.num_batches_train), desc='Train epoch'):
+            for _ in tqdm(range(FLAGS.num_batches_train), desc='Epoch {:3d}'.format(epoch)):
                 sess.run(self.train_op, {self.keep_prob: FLAGS.keep_prob, self.is_train: True})
 
-                if self.global_step.eval() % FLAGS.save_freq == 0:
-                    self.saver.save(sess, FLAGS.ckpt_dir, global_step=self.global_step.eval())
+            self.track_performance(sess)
+            self.saver.save(sess, FLAGS.ckpt_dir, global_step=epoch)
+
+    def track_performance(self, sess):
+        sess.run(self.iterator.initializer, {self.filename: ['tfrecords/train.tfrecords'],
+                                             self.batch_size: FLAGS.eval_train_batch_size,
+                                             self.augment: False})
+        total = 0
+        for _ in range(FLAGS.num_batches_eval_train):
+            total += sum(sess.run(self.correct_preds_op, {self.keep_prob: 1.0, self.is_train: False}))
+        print("Train accuracy: ", total / FLAGS.eval_train_size)
+
+        sess.run(self.iterator.initializer, {self.filename: ['tfrecords/test.tfrecords'],
+                                             self.batch_size: FLAGS.eval_test_batch_size,
+                                             self.augment: False})
+        total = 0
+        for _ in range(FLAGS.num_batches_eval_test):
+            total += sum(sess.run(self.correct_preds_op, {self.keep_prob: 1.0, self.is_train: False}))
+        print("Test accuracy: ", total / FLAGS.eval_test_size)
 
     def eval(self, sess):
-        if FLAGS.mode == 'eval_train':
-            num_batches = FLAGS.eval_train_size // FLAGS.eval_train_batch_size
-            num_images = FLAGS.eval_train_size
-        elif FLAGS.mode == 'eval_test':
-            num_batches = FLAGS.eval_test_size // FLAGS.eval_test_batch_size
-            num_images = FLAGS.eval_test_size
-        else:
-            raise ValueError('Unrecognized mode')
+        sess.run(self.iterator.initializer, {self.filename: ['tfrecords/train.tfrecords'],
+                                             self.batch_size: FLAGS.eval_train_batch_size,
+                                             self.augment: False})
+        num_batches = FLAGS.train_size // FLAGS.eval_train_batch_size
+        train_accuracy = 0
+        for _ in tqdm(range(num_batches), desc='Train eval'):
+            train_accuracy += sum(sess.run(self.correct_preds_op, {self.keep_prob: 1.0, self.is_train: False}))
+        print("Train accuracy: ", train_accuracy / FLAGS.train_size)
 
-        total = 0
-        for _ in tqdm(range(num_batches)):
-            total += sum(sess.run(self.correct_preds_op, {self.keep_prob: 1.0, self.is_train: False}))
+        sess.run(self.iterator.initializer, {self.filename: ['tfrecords/test.tfrecords'],
+                                             self.batch_size: FLAGS.eval_test_batch_size,
+                                             self.augment: False})
+        num_batches = FLAGS.test_size // FLAGS.eval_test_batch_size
+        test_accuracy = 0
+        for _ in tqdm(range(num_batches), desc='Test eval'):
+            test_accuracy += sum(sess.run(self.correct_preds_op, {self.keep_prob: 1.0, self.is_train: False}))
+        print("Test accuracy: ", test_accuracy / FLAGS.test_size)
 
-        return total / num_images
+        return train_accuracy, test_accuracy
 
 
 def set_random_seed():
@@ -106,12 +128,21 @@ def parce_tfrecord(serialized_example):
 
 
 def train_transform(image):
-    image = tf.reshape(image, [32,32,3])
+    image = tf.random_crop(image, [24,24,3])
+    image =tf.image.random_flip_left_right(image)
+    image = tf.image.random_brightness(image, max_delta=63)
+    image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+    image = tf.image.per_image_standardization(image)
+    image.set_shape([24,24,3])
+
     return image
 
 
 def test_transform(image):
-    image = tf.reshape(image, [32, 32, 3])
+    image = tf.image.central_crop(image, 24/32)
+    image = tf.image.per_image_standardization(image)
+    image.set_shape([24,24,3])
+
     return image
 
 
@@ -128,11 +159,12 @@ def network_input():
         batch_size = tf.placeholder(tf.int64)
 
         dataset = tf.data.TFRecordDataset(filename)
-        dataset = dataset.map(parce_tfrecord)
-        dataset = dataset.map(lambda image, label: data_augmentation(image, label, augment))
+        dataset = dataset.map(parce_tfrecord, num_parallel_calls=4)
+        dataset = dataset.map(lambda image, label: data_augmentation(image, label, augment), num_parallel_calls=4)
         dataset = dataset.shuffle(10000)
         dataset = dataset.repeat(FLAGS.num_epochs)
         dataset = dataset.batch(batch_size)
+        dataset = dataset.prefetch(5000)
 
         iterator = dataset.make_initializable_iterator()
         images, labels = iterator.get_next()
