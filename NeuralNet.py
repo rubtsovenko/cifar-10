@@ -1,10 +1,12 @@
 import tensorflow as tf
 from tqdm import tqdm
 from config import FLAGS
-from architectures import net_1, net_2, resnet20
+from architectures import net_1, net_2, net_3, resnet20
 import numpy as np
 import os
-
+import tensorlayer
+MEAN = 0.47336489
+STD = 0.25156906
 
 class CifarNeuralNet(object):
     def __init__(self):
@@ -118,7 +120,7 @@ def parce_tfrecord(serialized_example):
     depth = tf.cast(parsed_record['depth'], tf.int32)
 
     image = tf.decode_raw(parsed_record['image_raw'], tf.float32)
-    image = tf.reshape(image, [height, width, depth])
+    image = tf.reshape(image, shape=[height, width, depth])
 
     # Preprocessing
     label = tf.cast(parsed_record['label'], tf.int32)
@@ -128,25 +130,33 @@ def parce_tfrecord(serialized_example):
 
 
 def train_transform(image):
-    image = tf.random_crop(image, [24,24,3])
-    image =tf.image.random_flip_left_right(image)
-    image = tf.image.random_brightness(image, max_delta=63)
-    image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
-    image = tf.image.per_image_standardization(image)
-    image.set_shape([24,24,3])
+    #image = tf.random_crop(image, [24,24,3])
+
+    #image = tf.reshape(image, shape=[32,32,3])
+    image = tf.image.random_flip_left_right(image)
+    image = tf.contrib.image.rotate(image, tf.random_uniform(shape=(), minval=-15/180*3.14, maxval=15/180*3.14))
+    image = tf.py_func(tensorlayer.prepro.shift, inp=[image, 0.1, 0.1, True], Tout='float32')
+
+    #image = tf.image.random_brightness(image, max_delta=63)
+    #image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+    #image = tf.image.per_image_standardization(image)
+    image.set_shape([32,32,3])
 
     return image
 
 
 def test_transform(image):
-    image = tf.image.central_crop(image, 24/32)
-    image = tf.image.per_image_standardization(image)
-    image.set_shape([24,24,3])
+    #image = tf.reshape(image, shape=[32,32,3])
+
+    #image = tf.image.central_crop(image, 24/32)
+    #image = tf.image.per_image_standardization(image)
+    image.set_shape([32,32,3])
 
     return image
 
 
 def data_augmentation(image, label, augment):
+    image = (image - MEAN) / (STD+1e-7)
     transformation = tf.cond(augment, lambda: train_transform(image), lambda: test_transform(image))
     image = transformation
     return image, label
@@ -159,12 +169,12 @@ def network_input():
         batch_size = tf.placeholder(tf.int64)
 
         dataset = tf.data.TFRecordDataset(filename)
-        dataset = dataset.map(parce_tfrecord, num_parallel_calls=4)
-        dataset = dataset.map(lambda image, label: data_augmentation(image, label, augment), num_parallel_calls=4)
+        dataset = dataset.map(parce_tfrecord, num_parallel_calls=8)
+        dataset = dataset.map(lambda image, label: data_augmentation(image, label, augment), num_parallel_calls=8)
         dataset = dataset.shuffle(10000)
         dataset = dataset.repeat(FLAGS.num_epochs)
         dataset = dataset.batch(batch_size)
-        dataset = dataset.prefetch(5000)
+        dataset = dataset.prefetch(100)
 
         iterator = dataset.make_initializable_iterator()
         images, labels = iterator.get_next()
@@ -173,10 +183,12 @@ def network_input():
 
 
 def build_trunk(X, keep_prob, is_train):
-    if FLAGS.trunk == 'net_2':
+    if FLAGS.trunk == 'net_1':
         y_logits = net_1(X, keep_prob)
-    elif FLAGS.trunk == 'net_3':
+    elif FLAGS.trunk == 'net_2':
         y_logits = net_2(X, keep_prob)
+    elif FLAGS.trunk == 'net_3':
+        y_logits = net_3(X, is_train)
     elif FLAGS.trunk == 'resnet20':
         y_logits = resnet20(X, is_train)
     else:

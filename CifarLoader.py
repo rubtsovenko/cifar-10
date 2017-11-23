@@ -31,6 +31,11 @@ def get_data():
     train_images, train_labels = get_images_labels(train_data_files)
     test_images, test_labels = get_images_labels(test_data_files)
 
+
+    # mean = np.mean(train_images, axis=(0, 1, 2, 3))
+    # std = np.std(train_images, axis=(0, 1, 2, 3))
+    # mean= 0.47336489, std=0.25156906
+
     return train_images, train_labels, test_images, test_labels
 
 

@@ -15,7 +15,7 @@ tf.app.flags.DEFINE_integer(
     'num_epochs', 90,
     'Number of training epochs.')
 tf.app.flags.DEFINE_string(
-    'trunk', 'net_2',
+    'trunk', 'net_3',
     'Name of the network\'s trunk, one of "net_1", "net_2", "resnet20".')
 tf.app.flags.DEFINE_integer(
     'train_batch_size', 128,
@@ -33,7 +33,7 @@ tf.app.flags.DEFINE_integer(
     'eval_train_size', 1000,
     'Size of the data using for evaluation model\'s performance on the train set.')
 tf.app.flags.DEFINE_integer(
-    'eval_test_size', 2000,
+    'eval_test_size', 1000,
     'Size of the data using for evaluation model\'s performance on the test set.')
 tf.app.flags.DEFINE_integer(
     'save_freq', 1,
@@ -70,7 +70,7 @@ tf.app.flags.DEFINE_string(
 # Optimization Flags
 # ============================================================================================================ #
 tf.app.flags.DEFINE_float(
-    'weight_decay', 0.004,
+    'weight_decay', 0.0001,
     'The weight decay on the model weights.')
 tf.app.flags.DEFINE_string(
     'optimizer', 'momentum',

@@ -59,6 +59,43 @@ def net_2(input, keep_prob):
     return net
 
 
+def net_3(input, is_train):
+    with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                        activation_fn=tf.nn.relu,
+                        biases_initializer=const_init,
+                        weights_initializer=var_scale,
+                        weights_regularizer=slim.l2_regularizer(FLAGS.weight_decay)):
+        with slim.arg_scope([slim.batch_norm],
+                            decay=FLAGS.decay_bn,
+                            center=True,
+                            scale=True,
+                            is_training=is_train):
+            net = slim.conv2d(input, 32, [3, 3], scope='conv1')
+            net = slim.batch_norm(net, scope='bn1')
+            net = slim.conv2d(net, 32, [3, 3], scope='conv2')
+            net = slim.batch_norm(net, scope='bn2')
+            net = slim.max_pool2d(net, [2,2])
+            net = slim.dropout(net, 1-tf.cast(is_train, tf.float32)*0.2)
+
+            net = slim.conv2d(net, 64, [3, 3], scope='conv3')
+            net = slim.batch_norm(net, scope='bn3')
+            net = slim.conv2d(net, 64, [3, 3], scope='conv4')
+            net = slim.batch_norm(net, scope='bn4')
+            net = slim.max_pool2d(net, [2, 2])
+            net = slim.dropout(net, 1-tf.cast(is_train, tf.float32)*0.3)
+
+            net = slim.conv2d(net, 128, [3, 3], scope='conv5')
+            net = slim.batch_norm(net, scope='bn5')
+            net = slim.conv2d(net, 128, [3, 3], scope='conv6')
+            net = slim.batch_norm(net, scope='bn6')
+            net = slim.max_pool2d(net, [2, 2])
+            net = slim.dropout(net, 1-tf.cast(is_train, tf.float32)*0.4)
+
+            net = slim.flatten(net)
+            net = slim.fully_connected(net, 10, activation_fn=None, scope='fc7', weights_regularizer=None)
+    return net
+
+
 def resnet20(input, is_train, n=3):
     filters = [16, 32, 64]
 
