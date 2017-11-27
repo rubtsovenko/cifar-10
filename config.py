@@ -6,7 +6,7 @@ import numpy as np
 # General Flags
 # ============================================================================================================ #
 tf.app.flags.DEFINE_string(
-    'run_name', 'experiment_1',
+    'run_name', 'run_1',
     'Create a new folder for the experiment with a set name')
 tf.app.flags.DEFINE_integer(
     'ckpt', 0,
@@ -15,20 +15,19 @@ tf.app.flags.DEFINE_integer(
     'num_epochs', 90,
     'Number of training epochs.')
 tf.app.flags.DEFINE_string(
-    'trunk', 'net_3',
-    'Name of the network\'s trunk, one of "net_1", "net_2", "resnet20".')
+    'trunk', 'net_1',
+    'Name of the network\'s trunk, one of "net_1", "net_2", "net_3", "net_4", "resnet20".')
+tf.app.flags.DEFINE_float(
+    'decay_bn', 0.999,
+    'decay parameter for batch normalization layers')
+tf.app.flags.DEFINE_integer(
+    'num_threads', 8,
+    'Number of threads to read and preprocess.')
+
+# batch settings
 tf.app.flags.DEFINE_integer(
     'train_batch_size', 128,
     'Mini-batch size')
-tf.app.flags.DEFINE_float(
-    'keep_prob', 0.75,
-    'Probability for a neuron to be opened in a dropout layers.')
-tf.app.flags.DEFINE_integer(
-    'eval_train_batch_size', 500,
-    'Mini-batch size. It has to divide the number of elements in a train dataset to read from queue without troubles')
-tf.app.flags.DEFINE_integer(
-    'eval_test_batch_size', 500,
-    'Mini-batch size. It has to divide the number of elements in a test dataset to read from queue without troubles')
 tf.app.flags.DEFINE_integer(
     'eval_train_size', 1000,
     'Size of the data using for evaluation model\'s performance on the train set.')
@@ -36,11 +35,13 @@ tf.app.flags.DEFINE_integer(
     'eval_test_size', 1000,
     'Size of the data using for evaluation model\'s performance on the test set.')
 tf.app.flags.DEFINE_integer(
-    'save_freq', 1,
-    'Save model\'s parameters every n iterations.')
+    'eval_train_batch_size', 500,
+    'Mini-batch size. It has to divide the number of elements in a train dataset to read from queue without troubles')
 tf.app.flags.DEFINE_integer(
-    'eval_freq', 0,
-    'Eval model\'s performance every n iterations.')
+    'eval_test_batch_size', 500,
+    'Mini-batch size. It has to divide the number of elements in a test dataset to read from queue without troubles')
+
+# randomness
 tf.app.flags.DEFINE_integer(
     'random_seed_tf', 1,
     'Particular random initialization of model\'s parameters, 0 correspond to a random init without particular seed.')
@@ -51,30 +52,23 @@ tf.app.flags.DEFINE_integer(
 tf.app.flags.DEFINE_integer(
     'queue_random_seed', 1,
     'Queue randomness')
+
+# save info
+tf.app.flags.DEFINE_integer(
+    'save_freq', 1,
+    'Save model\'s parameters every n iterations.')
 tf.app.flags.DEFINE_integer(
     'track_vars_grads_freq', 0,
     'Save statistics about variables and gradients each specified number of iterations (gradient updates)'
     '0 means ')
-tf.app.flags.DEFINE_float(
-    'decay_bn', 0.999,
-    'decay parameter for batch normalization layers')
-tf.app.flags.DEFINE_string(
-    'shortcut_mode', 'conv1x1',
-    'One of "conv1x1" or "padding"')
-tf.app.flags.DEFINE_string(
-    'mode', 'train',
-    'One of "train" or "eval"')
 
 
 # ============================================================================================================ #
 # Optimization Flags
 # ============================================================================================================ #
-tf.app.flags.DEFINE_float(
-    'weight_decay', 0.0001,
-    'The weight decay on the model weights.')
 tf.app.flags.DEFINE_string(
     'optimizer', 'momentum',
-    'Name of the optimizer, one of "sgd", "momentum", "adam".')
+    'Name of the optimizer, one of "sgd", "momentum", "adam", "rmsprop".')
 tf.app.flags.DEFINE_float(
     'momentum', 0.9,
     'The momentum for the MomentumOptimizer and RMSPropOptimizer.')
@@ -88,19 +82,19 @@ tf.app.flags.DEFINE_float(
     'adam_beta2', 0.999,
     'The exponential decay rate for the 2nd moment estimates.')
 tf.app.flags.DEFINE_float(
-    'opt_epsilon', 1e-08,
-    'Epsilon term for the optimizer.')
+    'rmsprop_momentum', 0.9,
+    'Momentum for RMSProp')
+tf.app.flags.DEFINE_float(
+    'rmsprop_decay', 0.9,
+    'Decay term for RMSProp.')
 
-
-# ============================================================================================================ #
-# Learning Rate Flags
-# ============================================================================================================ #
-tf.app.flags.DEFINE_string(
-    'learning_rate_decay_type', 'fixed',
-    'Specifies how the learning rate is decayed. One of "fixed", "exponential", "polynomial".')
+# learning rate
 tf.app.flags.DEFINE_float(
     'learning_rate', 1e-3,
     'Initial learning rate.')
+tf.app.flags.DEFINE_string(
+    'learning_rate_decay_type', 'fixed',
+    'Specifies how the learning rate is decayed. One of "fixed", "exponential", "polynomial".')
 tf.app.flags.DEFINE_float(
     'end_learning_rate', 1e-6,
     'The minimal end learning rate used by a polynomial decay learning rate.')
@@ -115,6 +109,12 @@ tf.app.flags.DEFINE_float(
     'The decay to use for the moving average.'
     'If left as None, then moving averages are not used.')
 
+# weight decay regularization
+tf.app.flags.DEFINE_float(
+    'weight_decay', 0.0001,
+    'The weight decay on the model weights.')
+
+
 # ============================================================================================================ #
 # CIFAR-10
 # ============================================================================================================ #
@@ -127,6 +127,12 @@ tf.app.flags.DEFINE_integer(
 tf.app.flags.DEFINE_integer(
     'num_classes', 10,
     'Size of the test dataset')
+tf.app.flags.DEFINE_float(
+    'MEAN', 0.47336489,
+    'MEAN pixel computed in CifarLoader')
+tf.app.flags.DEFINE_float(
+    'STD', 0.25156906,
+    'STD pixels computed in CifarLoader')
 
 
 FLAGS = tf.app.flags.FLAGS
@@ -134,7 +140,7 @@ FLAGS = tf.app.flags.FLAGS
 # I want to train with only full batches
 FLAGS.num_batches_train = int(np.ceil(FLAGS.train_size / FLAGS.train_batch_size))
 FLAGS.num_batches_eval_train = int(np.ceil(FLAGS.eval_train_size / FLAGS.eval_train_batch_size))
-FLAGS.num_batches_eval_test = int(np.ceil(FLAGS.eval_test_size // FLAGS.eval_test_batch_size))
+FLAGS.num_batches_eval_test = int(np.ceil(FLAGS.eval_test_size / FLAGS.eval_test_batch_size))
 
 FLAGS.root_dir = os.getcwd()
 FLAGS.tfrecords_dir = os.path.join(FLAGS.root_dir, 'tfrecords')

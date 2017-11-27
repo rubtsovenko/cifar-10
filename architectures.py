@@ -1,6 +1,6 @@
 from config import FLAGS
 import tensorflow as tf
-from utils import conv_bn_relu
+from utils import conv_bn_relu, conv, max_pool, fc, dropout, flatten_3d, prob_close
 
 slim = tf.contrib.slim
 xavier_conv = slim.xavier_initializer_conv2d()
@@ -11,8 +11,20 @@ trunc_normal = tf.truncated_normal_initializer(mean=0, stddev=0.1)
 regular = slim.l2_regularizer(FLAGS.weight_decay)
 
 
-# tf.contrib.slim
-def net_1(input, keep_prob):
+def net_1(input, is_train):
+    conv1 = conv(input, filter_h=5, filter_w=5, num_filters=32, stride_y=1, stride_x=1, name='conv1')
+    pool1 = max_pool(conv1, filter_h=2, filter_w=2, stride_y=2, stride_x=2, name='pool1')
+    conv2 = conv(pool1, 5, 5, 64, 1, 1, 'conv2')
+    pool2 = max_pool(conv2, 2, 2, 2, 2, 'pool2')
+    flattened = flatten_3d(pool2, name='flattening')
+    fc3 = fc(flattened, out_neurons=1000, name='fc3')
+    dropout3 = dropout(fc3, keep_prob=prob_close(is_train, 0.5), name='dropout3')
+    fc4 = fc(dropout3, out_neurons=10, name='fc4', relu=False)
+
+    return fc4
+
+
+def net_2(input, is_train):
     net = slim.conv2d(input, 32, [5,5], stride=1, padding='VALID',
                       weights_initializer=trunc_normal,
                       biases_initializer=const_init,
@@ -28,7 +40,7 @@ def net_1(input, keep_prob):
                                weights_initializer=trunc_normal,
                                biases_initializer=const_init,
                                scope='fc3')
-    net = slim.dropout(net, keep_prob=keep_prob)
+    net = slim.dropout(net, keep_prob=prob_close(is_train, 0.5))
     net = slim.fully_connected(net, 10, activation_fn=None,
                                weights_initializer=trunc_normal,
                                biases_initializer=const_init,
@@ -36,7 +48,7 @@ def net_1(input, keep_prob):
     return net
 
 
-def net_2(input, keep_prob):
+def net_3(input, is_train):
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
                         activation_fn=tf.nn.relu,
                         weights_initializer=var_scale,
@@ -52,14 +64,14 @@ def net_2(input, keep_prob):
 
             net = slim.flatten(net)
             net = slim.fully_connected(net, 384, weights_regularizer=regular, scope='fc3')
-            net = slim.dropout(net, keep_prob, scope='dropout3')
+            net = slim.dropout(net, prob_close(is_train, 0.5), scope='dropout3')
             net = slim.fully_connected(net, 192, weights_regularizer=regular, scope='fc4')
-            net = slim.dropout(net, keep_prob, scope='dropout4')
+            net = slim.dropout(net, prob_close(is_train, 0.5), scope='dropout4')
             net = slim.fully_connected(net, 10, activation_fn=None, scope='fc5')
     return net
 
 
-def net_3(input, is_train):
+def net_4(input, is_train):
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
                         activation_fn=tf.nn.relu,
                         biases_initializer=const_init,
@@ -75,21 +87,21 @@ def net_3(input, is_train):
             net = slim.conv2d(net, 32, [3, 3], scope='conv2')
             net = slim.batch_norm(net, scope='bn2')
             net = slim.max_pool2d(net, [2,2])
-            net = slim.dropout(net, 1-tf.cast(is_train, tf.float32)*0.2)
+            net = slim.dropout(net, prob_close(is_train, 0.2))
 
             net = slim.conv2d(net, 64, [3, 3], scope='conv3')
             net = slim.batch_norm(net, scope='bn3')
             net = slim.conv2d(net, 64, [3, 3], scope='conv4')
             net = slim.batch_norm(net, scope='bn4')
             net = slim.max_pool2d(net, [2, 2])
-            net = slim.dropout(net, 1-tf.cast(is_train, tf.float32)*0.3)
+            net = slim.dropout(net, prob_close(is_train, 0.3))
 
             net = slim.conv2d(net, 128, [3, 3], scope='conv5')
             net = slim.batch_norm(net, scope='bn5')
             net = slim.conv2d(net, 128, [3, 3], scope='conv6')
             net = slim.batch_norm(net, scope='bn6')
             net = slim.max_pool2d(net, [2, 2])
-            net = slim.dropout(net, 1-tf.cast(is_train, tf.float32)*0.4)
+            net = slim.dropout(net, prob_close(is_train, 0.4))
 
             net = slim.flatten(net)
             net = slim.fully_connected(net, 10, activation_fn=None, scope='fc7', weights_regularizer=None)
