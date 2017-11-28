@@ -45,22 +45,11 @@ tf.app.flags.DEFINE_integer(
 tf.app.flags.DEFINE_integer(
     'random_seed_tf', 1,
     'Particular random initialization of model\'s parameters, 0 correspond to a random init without particular seed.')
-tf.app.flags.DEFINE_integer(
-    'random_seed_np', 1,
-    'Particular random initialization of numpy operations, i.e batch iterations and consequently computed gradients'
-    'and weights update, 0 - random without particular seed')
-tf.app.flags.DEFINE_integer(
-    'queue_random_seed', 1,
-    'Queue randomness')
 
 # save info
 tf.app.flags.DEFINE_integer(
     'save_freq', 1,
     'Save model\'s parameters every n iterations.')
-tf.app.flags.DEFINE_integer(
-    'track_vars_grads_freq', 0,
-    'Save statistics about variables and gradients each specified number of iterations (gradient updates)'
-    '0 means ')
 
 
 # ============================================================================================================ #
@@ -92,22 +81,6 @@ tf.app.flags.DEFINE_float(
 tf.app.flags.DEFINE_float(
     'learning_rate', 1e-3,
     'Initial learning rate.')
-tf.app.flags.DEFINE_string(
-    'learning_rate_decay_type', 'fixed',
-    'Specifies how the learning rate is decayed. One of "fixed", "exponential", "polynomial".')
-tf.app.flags.DEFINE_float(
-    'end_learning_rate', 1e-6,
-    'The minimal end learning rate used by a polynomial decay learning rate.')
-tf.app.flags.DEFINE_float(
-    'learning_rate_decay_factor', 0.9,
-    'Learning rate decay factor.')
-tf.app.flags.DEFINE_integer(
-    'num_epochs_per_decay', 2,
-    'Number of epochs after which learning rate decreases.')
-tf.app.flags.DEFINE_float(
-    'moving_average_decay', None,
-    'The decay to use for the moving average.'
-    'If left as None, then moving averages are not used.')
 
 # weight decay regularization
 tf.app.flags.DEFINE_float(
@@ -149,7 +122,9 @@ experiments_folder = os.path.join(FLAGS.root_dir, 'experiments')
 if not os.path.exists(experiments_folder):
     os.makedirs(experiments_folder)
 FLAGS.experiment_dir = os.path.join(experiments_folder, FLAGS.run_name)
+FLAGS.log_dir = os.path.join(FLAGS.experiment_dir, 'logs')
 if not os.path.exists(FLAGS.experiment_dir):
     os.makedirs(FLAGS.experiment_dir)
+    os.makedirs(FLAGS.log_dir)
 FLAGS.summary_dir = os.path.join(FLAGS.experiment_dir, 'summary')
 FLAGS.ckpt_dir = os.path.join(FLAGS.experiment_dir, 'checkpoints/')

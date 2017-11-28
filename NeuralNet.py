@@ -5,16 +5,26 @@ from architectures import net_1, net_2, net_3, resnet20
 import numpy as np
 import os
 import tensorlayer
+import logging
+import datetime
+ALL_FLAGS = FLAGS.__flags
 
 
 class CifarNeuralNet(object):
     def __init__(self):
+        self.logger = get_logger(FLAGS.log_dir)
+        now = datetime.datetime.now()
+        self.logger.info('{} Model Created '.format(now.strftime("%Y-%m-%d %H:%M")).center(150, '*'))
+        self.logger.info('CONFIG FLAGS:')
+        self.logger.info(ALL_FLAGS)
+        self.logger.info('')
+
         set_random_seed()
         self.X, self.y_, self.filenames, self.augment, self.batch_size, self.num_epochs, self.iterator = network_input()
         self.is_train = tf.placeholder(tf.bool)
 
         self.y_logits_op = build_trunk(self.X, self.is_train)
-        self.loss_op = add_loss(self.y_, self.y_logits_op)
+        self.loss_vector_op, self.loss_op = add_loss(self.y_, self.y_logits_op)
         with tf.name_scope('softmax'):
             self.y_preds_op = tf.nn.softmax(self.y_logits_op)
         self.correct_preds_op = tf.equal(tf.argmax(self.y_preds_op, 1), tf.argmax(self.y_, 1))
@@ -25,90 +35,100 @@ class CifarNeuralNet(object):
         self.train_op, self.global_step = add_train_op(self.loss_op, self.optimizer_op)
 
         with tf.name_scope('init'):
-            self.init_op = tf.group(tf.global_variables_initializer())
+            self.init_op = tf.global_variables_initializer()
 
-        self.summary_metrics, self.summary_variables, self.summary_grads = self._create_summaries()
         self.saver = tf.train.Saver(max_to_keep=100)
 
     def load_or_init(self, sess):
+        self.logger.info('INITIALIZATION:')
+
         if FLAGS.ckpt == 0:
             saved_ckpt = tf.train.latest_checkpoint(FLAGS.ckpt_dir)
             if saved_ckpt is None:
-                print('There is not any saved model.\nUsed random initialization')
+                self.logger.info('There is not any saved model. Random initialization is used.')
                 sess.run(self.init_op)
             else:
                 FLAGS.ckpt = int(saved_ckpt.split('/')[-1][1:])
-                print('Load model from ckpt {}'.format(FLAGS.ckpt))
+                self.logger.info('Load model from ckpt {}'.format(FLAGS.ckpt))
                 self.saver.restore(sess, saved_ckpt)
         else:
             chosen_ckpt = os.path.join(FLAGS.ckpt_dir, '-'+str(FLAGS.ckpt))
             if os.path.exists(chosen_ckpt+'.index'):
-                print('Load model from ckpt {}'.format(FLAGS.ckpt))
+                self.logger.info('Load model from ckpt {}'.format(FLAGS.ckpt))
                 self.saver.restore(sess, chosen_ckpt)
             else:
+                self.logger.info('No ckpt {} exists in {}'.format(FLAGS.ckpt, FLAGS.ckpt_dir))
                 raise ValueError('No ckpt {} exists in {}'.format(FLAGS.ckpt, FLAGS.ckpt_dir))
 
     def train(self, sess):
+        self.logger.info('TRAINING:')
+        self.logger.info('')
+
+        if self.global_step.eval() == 0:
+            self.track_performance(sess, 0)
+
         for epoch in range(FLAGS.ckpt + 1, FLAGS.ckpt + 1 + FLAGS.num_epochs):
-            sess.run(self.iterator.initializer, {self.filename: ['tfrecords/train.tfrecords'],
+            sess.run(self.iterator.initializer, {self.filenames: ['tfrecords/train.tfrecords'],
                                                  self.batch_size: FLAGS.train_batch_size,
                                                  self.num_epochs: 1,
                                                  self.augment: True})
             for _ in tqdm(range(FLAGS.num_batches_train), desc='Epoch {:3d}'.format(epoch)):
                 sess.run(self.train_op, {self.is_train: True})
+                #print(sess.run(self.accuracy_op, {self.is_train: False}))
+                #print(sess.run(self.loss_op, {self.is_train: False}))
 
-            self.track_performance(sess)
+
+            self.track_performance(sess, epoch)
             if epoch % FLAGS.save_freq == 0:
                 self.saver.save(sess, FLAGS.ckpt_dir, global_step=epoch)
 
-    def track_performance(self, sess):
-        sess.run(self.iterator.initializer, {self.filename: ['tfrecords/train.tfrecords'],
-                                             self.batch_size: FLAGS.eval_train_batch_size,
+    def track_performance(self, sess, epoch):
+        train_accuracy, train_loss = self.eval(sess, FLAGS.eval_train_size, FLAGS.eval_train_batch_size,
+                                               ['tfrecords/train.tfrecords'])
+        print("Train Accuracy: {:.3f}".format(train_accuracy))
+        print("Train Loss: {:.3f}".format(train_loss))
+
+        test_accuracy, test_loss = self.eval(sess, FLAGS.eval_test_size, FLAGS.eval_test_batch_size,
+                                             ['tfrecords/test.tfrecords'])
+        print("Test Accuracy: {:.3f}".format(test_accuracy))
+        print("Test Loss: {:.3f}".format(test_loss))
+
+        self.logger.info('Epoch {}: train acc: {:.3f}, train loss: {:.3f}, test acc: {:.3f}, test loss: {:.3f}.'
+                         .format(epoch, train_accuracy, train_loss, test_accuracy, test_loss))
+
+    def eval(self, sess, num_images, batch_size, filenames, disable_bar=True):
+        sess.run(self.iterator.initializer, {self.filenames: filenames,
+                                             self.batch_size: batch_size,
                                              self.num_epochs: 1,
                                              self.augment: False})
-        total = 0
-        for _ in range(FLAGS.num_batches_eval_train):
-            total += sum(sess.run(self.correct_preds_op, {self.is_train: False}))
-        print("Train accuracy: ", total / FLAGS.eval_train_size)
+        num_batches = int(np.ceil(num_images) / batch_size)
+        num_correct_preds = 0
+        loss = 0
+        for _ in tqdm(range(num_batches), desc='Eval', disable=disable_bar):
+            correct_preds_batch, loss_batch = sess.run([self.correct_preds_op, self.loss_vector_op], {self.is_train: False})
+            num_correct_preds += np.sum(correct_preds_batch)
+            loss += np.sum(loss_batch)
+        accuracy = num_correct_preds / num_images
+        loss = loss / num_images
 
-        sess.run(self.iterator.initializer, {self.filename: ['tfrecords/test.tfrecords'],
-                                             self.batch_size: FLAGS.eval_test_batch_size,
-                                             self.num_epochs: 1,
-                                             self.augment: False})
-        total = 0
-        for _ in range(FLAGS.num_batches_eval_test):
-            total += sum(sess.run(self.correct_preds_op, {self.is_train: False}))
-        print("Test accuracy: ", total / FLAGS.eval_test_size)
+        return accuracy, loss
 
-    def eval(self, sess):
-        sess.run(self.iterator.initializer, {self.filename: ['tfrecords/train.tfrecords'],
-                                             self.batch_size: FLAGS.eval_train_batch_size,
-                                             self.num_epochs: 1,
-                                             self.augment: False})
-        num_batches = FLAGS.train_size // FLAGS.eval_train_batch_size
-        correct_preds = 0
-        for _ in tqdm(range(num_batches), desc='Train eval'):
-            correct_preds += sum(sess.run(self.correct_preds_op, {self.is_train: False}))
-        train_accuracy = correct_preds / FLAGS.train_size
 
-        sess.run(self.iterator.initializer, {self.filename: ['tfrecords/test.tfrecords'],
-                                             self.batch_size: FLAGS.eval_test_batch_size,
-                                             self.num_epochs: 1,
-                                             self.augment: False})
-        num_batches = FLAGS.test_size // FLAGS.eval_test_batch_size
-        correct_preds = 0
-        for _ in tqdm(range(num_batches), desc='Test eval'):
-            correct_preds += sum(sess.run(self.correct_preds_op, {self.is_train: False}))
-        test_accuracy = correct_preds / FLAGS.test_size
+def get_logger(log_path):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
 
-        return train_accuracy, test_accuracy
+    handler = logging.FileHandler(os.path.join(log_path, 'logs.log'))
+    handler.setLevel(logging.INFO)
+
+    logger.addHandler(handler)
+
+    return logger
 
 
 def set_random_seed():
     if FLAGS.random_seed_tf != 0:
         tf.set_random_seed(FLAGS.random_seed_tf)
-    if FLAGS.random_seed_np != 0:
-        np.random.seed(FLAGS.random_seed_np)
 
 
 def parce_tfrecord(serialized_example):
@@ -126,6 +146,7 @@ def parce_tfrecord(serialized_example):
 
     image = tf.decode_raw(parsed_record['image_raw'], tf.float32)
     image = tf.reshape(image, shape=[height, width, depth])
+    image.set_shape([32, 32, 3])
 
     # Preprocessing
     label = tf.cast(parsed_record['label'], tf.int32)
@@ -195,11 +216,12 @@ def build_trunk(X, is_train):
 
 def add_loss(y_, y_logits):
     with tf.name_scope('loss'):
-        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_logits, labels=y_))
+        loss_vector = tf.nn.softmax_cross_entropy_with_logits(logits=y_logits, labels=y_)
+        cross_entropy = tf.reduce_mean(loss_vector)
         reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         loss = cross_entropy + sum(reg_losses)
 
-    return loss
+    return loss_vector, loss
 
 
 def add_optimizer():
