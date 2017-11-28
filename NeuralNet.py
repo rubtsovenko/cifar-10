@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tqdm import tqdm
 from config import FLAGS
-from architectures import net_1, net_2, net_3, resnet20
+from architectures import net_1, net_2, net_3, net_4, resnet20
 import numpy as np
 import os
 import tensorlayer
@@ -206,6 +206,8 @@ def build_trunk(X, is_train):
         y_logits = net_2(X, is_train)
     elif FLAGS.trunk == 'net_3':
         y_logits = net_3(X, is_train)
+    elif FLAGS.trunk == 'net_4':
+        y_logits = net_4(X, is_train)
     elif FLAGS.trunk == 'resnet20':
         y_logits = resnet20(X, is_train)
     else:

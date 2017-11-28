@@ -108,7 +108,7 @@ def net_4(input, is_train):
     return net
 
 
-def resnet20(input, is_train, n=3):
+def resnet_n(input, is_train, n=3):
     filters = [16, 32, 64]
 
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
@@ -148,4 +148,70 @@ def resnet20(input, is_train, n=3):
             net = slim.flatten(net)
             net = slim.fully_connected(net, 10, activation_fn=None, scope='fc20')
 
+    return net
+
+
+def resnet20(input, is_train):
+    with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                        activation_fn=None,
+                        biases_initializer=const_init,
+                        weights_initializer=var_scale,
+                        weights_regularizer=slim.l2_regularizer(FLAGS.weight_decay)):
+        with slim.arg_scope([slim.batch_norm],
+                            decay=FLAGS.decay_bn,
+                            center=True,
+                            scale=True,
+                            is_training=is_train):
+            net = conv_bn_relu(input, filters=16, kernel=3, stride=1, scope='conv1')
+
+            shortcut = tf.identity(net, name='iden_shortcut_2_1')
+            net = conv_bn_relu(net, filters=16, kernel=3, stride=1, scope='conv2_1_1')
+            net = conv_bn_relu(net, filters=16, kernel=3, stride=1, scope='conv2_1_2')
+            net = tf.add(net, shortcut, name='merge_2_1')
+
+            shortcut = tf.identity(net, name='iden_shortcut_2_2')
+            net = conv_bn_relu(net, filters=16, kernel=3, stride=1, scope='conv2_2_1')
+            net = conv_bn_relu(net, filters=16, kernel=3, stride=1, scope='conv2_2_1')
+            net = tf.add(net, shortcut, name='merge_2_2')
+
+            shortcut = tf.identity(net, name='iden_shortcut_2_3')
+            net = conv_bn_relu(net, filters=16, kernel=3, stride=1, scope='conv2_3_1')
+            net = conv_bn_relu(net, filters=16, kernel=3, stride=1, scope='conv2_3_2')
+            net = tf.add(net, shortcut, name='merge_2_3')
+
+            # Here is a decrease of the spatial size and an increase in depth
+            shortcut = slim.conv2d(net, 32, [1, 1], stride=2, scope='match_shortcut_3_1')
+            net = conv_bn_relu(net, filters=32, kernel=3, stride=2, scope='conv3_1_1')
+            net = conv_bn_relu(net, filters=32, kernel=3, stride=1, scope='conv3_1_2')
+            net = tf.add(net, shortcut, name='merge_3_1')
+
+            shortcut = tf.identity(net, name='iden_shortcut_3_2')
+            net = conv_bn_relu(net, filters=16, kernel=3, stride=1, scope='conv3_2_1')
+            net = conv_bn_relu(net, filters=16, kernel=3, stride=1, scope='conv3_2_2')
+            net = tf.add(net, shortcut, name='merge_3_2')
+
+            shortcut = tf.identity(net, name='iden_shortcut_3_3')
+            net = conv_bn_relu(net, filters=16, kernel=3, stride=1, scope='conv3_3_1')
+            net = conv_bn_relu(net, filters=16, kernel=3, stride=1, scope='conv3_3_2')
+            net = tf.add(net, shortcut, name='merge_3_3')
+
+            # Here is a decrease of the spatial size and an increase in depth
+            shortcut = slim.conv2d(net, 64, [1, 1], stride=2, scope='match_shortcut_4_1')
+            net = conv_bn_relu(net, filters=64, kernel=3, stride=2, scope='conv4_1_1')
+            net = conv_bn_relu(net, filters=64, kernel=3, stride=1, scope='conv4_1_2')
+            net = tf.add(net, shortcut, name='merge_4_1')
+
+            shortcut = tf.identity(net, name='iden_shortcut_4_2')
+            net = conv_bn_relu(net, filters=64, kernel=3, stride=1, scope='conv4_2_1')
+            net = conv_bn_relu(net, filters=64, kernel=3, stride=1, scope='conv4_2_2')
+            net = tf.add(net, shortcut, name='merge_4_2')
+
+            shortcut = tf.identity(net, name='iden_shortcut_4_3')
+            net = conv_bn_relu(net, filters=64, kernel=3, stride=1, scope='conv4_3_1')
+            net = conv_bn_relu(net, filters=64, kernel=3, stride=1, scope='conv4_3_2')
+            net = tf.add(net, shortcut, name='merge_4_3')
+
+            net = slim.avg_pool2d(net, [8, 8], stride=1, scope='avgpool20')
+            net = slim.flatten(net)
+            net = slim.fully_connected(net, 10, activation_fn=None, scope='fc20')
     return net
