@@ -60,15 +60,15 @@ class CifarNeuralNet(object):
                 self.logger.info('No ckpt {} exists in {}'.format(FLAGS.ckpt, FLAGS.ckpt_dir))
                 raise ValueError('No ckpt {} exists in {}'.format(FLAGS.ckpt, FLAGS.ckpt_dir))
 
-    def train(self, sess):
+    def train(self, sess, train_fn, test_fn=None):
         self.logger.info('TRAINING:')
         self.logger.info('')
 
         if self.global_step.eval() == 0:
-            self.track_performance(sess, 0)
+            self.track_performance(sess, 0, train_fn, test_fn)
 
         for epoch in range(FLAGS.ckpt + 1, FLAGS.ckpt + 1 + FLAGS.num_epochs):
-            sess.run(self.iterator.initializer, {self.filenames: ['tfrecords/train.tfrecords'],
+            sess.run(self.iterator.initializer, {self.filenames: train_fn,
                                                  self.batch_size: FLAGS.train_batch_size,
                                                  self.num_epochs: 1,
                                                  self.augment: True})
@@ -77,24 +77,22 @@ class CifarNeuralNet(object):
                 #print(sess.run(self.accuracy_op, {self.is_train: False}))
                 #print(sess.run(self.loss_op, {self.is_train: False}))
 
-
-            self.track_performance(sess, epoch)
+            self.track_performance(sess, epoch, train_fn, test_fn)
             if epoch % FLAGS.save_freq == 0:
                 self.saver.save(sess, FLAGS.ckpt_dir, global_step=epoch)
 
-    def track_performance(self, sess, epoch):
-        train_accuracy, train_loss = self.eval(sess, FLAGS.eval_train_size, FLAGS.eval_train_batch_size,
-                                               ['tfrecords/train.tfrecords'])
+    def track_performance(self, sess, epoch, train_fn, test_fn):
+        train_accuracy, train_loss = self.eval(sess, FLAGS.eval_train_size, FLAGS.eval_train_batch_size, train_fn)
         print("Train Accuracy: {:.3f}".format(train_accuracy))
         print("Train Loss: {:.3f}".format(train_loss))
 
-        test_accuracy, test_loss = self.eval(sess, FLAGS.eval_test_size, FLAGS.eval_test_batch_size,
-                                             ['tfrecords/test.tfrecords'])
-        print("Test Accuracy: {:.3f}".format(test_accuracy))
-        print("Test Loss: {:.3f}".format(test_loss))
+        if test_fn is not None:
+            test_accuracy, test_loss = self.eval(sess, FLAGS.eval_test_size, FLAGS.eval_test_batch_size, test_fn)
+            print("Test Accuracy: {:.3f}".format(test_accuracy))
+            print("Test Loss: {:.3f}".format(test_loss))
 
-        self.logger.info('Epoch {}: train acc: {:.3f}, train loss: {:.3f}, test acc: {:.3f}, test loss: {:.3f}.'
-                         .format(epoch, train_accuracy, train_loss, test_accuracy, test_loss))
+            self.logger.info('Epoch {}: train acc: {:.3f}, train loss: {:.3f}, test acc: {:.3f}, test loss: {:.3f}.'
+                             .format(epoch, train_accuracy, train_loss, test_accuracy, test_loss))
 
     def eval(self, sess, num_images, batch_size, filenames, disable_bar=True):
         sess.run(self.iterator.initializer, {self.filenames: filenames,

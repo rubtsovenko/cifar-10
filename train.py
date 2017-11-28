@@ -7,7 +7,7 @@ def main():
 
     with tf.Session() as sess:
         model.load_or_init(sess)
-        model.train(sess)
+        model.train(sess, ['tfrecords/train.tfrecords'])
 
 
 if __name__ == '__main__':
