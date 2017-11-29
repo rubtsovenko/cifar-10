@@ -48,46 +48,53 @@ class CifarNeuralNet(object):
                 self.logger.info('There is not any saved model. Random initialization is used.')
                 sess.run(self.init_op)
             else:
+                sess.run(self.init_op)
                 FLAGS.ckpt = int(saved_ckpt.split('/')[-1][1:])
                 self.logger.info('Load model from ckpt {}'.format(FLAGS.ckpt))
                 self.saver.restore(sess, saved_ckpt)
         else:
             chosen_ckpt = os.path.join(FLAGS.ckpt_dir, '-'+str(FLAGS.ckpt))
             if os.path.exists(chosen_ckpt+'.index'):
+                sess.run(self.init_op)
                 self.logger.info('Load model from ckpt {}'.format(FLAGS.ckpt))
                 self.saver.restore(sess, chosen_ckpt)
             else:
                 self.logger.info('No ckpt {} exists in {}'.format(FLAGS.ckpt, FLAGS.ckpt_dir))
                 raise ValueError('No ckpt {} exists in {}'.format(FLAGS.ckpt, FLAGS.ckpt_dir))
 
-    def train(self, sess, train_fn, test_fn=None):
+    def train(self, sess, train_fn, train_size, train_eval_fn, train_eval_size, test_eval_fn=None, test_eval_size=None):
         self.logger.info('TRAINING:')
         self.logger.info('')
 
+        num_batches = int(np.ceil(train_size) / FLAGS.train_batch_size)
+
         if self.global_step.eval() == 0:
-            self.track_performance(sess, 0, train_fn, test_fn)
+            self.track_performance(sess, 0, train_eval_fn, train_eval_size, test_eval_fn, test_eval_size)
 
         for epoch in range(FLAGS.ckpt + 1, FLAGS.ckpt + 1 + FLAGS.num_epochs):
             sess.run(self.iterator.initializer, {self.filenames: train_fn,
                                                  self.batch_size: FLAGS.train_batch_size,
                                                  self.num_epochs: 1,
-                                                 self.augment: True})
-            for _ in tqdm(range(FLAGS.num_batches_train), desc='Epoch {:3d}'.format(epoch)):
+                                                 self.augment: False})
+            for _ in tqdm(range(num_batches), desc='Epoch {:3d}'.format(epoch)):
                 sess.run(self.train_op, {self.is_train: True})
                 #print(sess.run(self.accuracy_op, {self.is_train: False}))
                 #print(sess.run(self.loss_op, {self.is_train: False}))
 
-            self.track_performance(sess, epoch, train_fn, test_fn)
+            #print(sess.run(self.accuracy_op, {self.is_train: False}))
+            #print(sess.run(self.loss_op, {self.is_train: False}))
+
+            self.track_performance(sess, 0, train_eval_fn, train_eval_size, test_eval_fn, test_eval_size)
             if epoch % FLAGS.save_freq == 0:
                 self.saver.save(sess, FLAGS.ckpt_dir, global_step=epoch)
 
-    def track_performance(self, sess, epoch, train_fn, test_fn):
-        train_accuracy, train_loss = self.eval(sess, FLAGS.eval_train_size, FLAGS.eval_train_batch_size, train_fn)
+    def track_performance(self, sess, epoch, train_eval_fn, train_eval_size, test_eval_fn=None, test_eval_size=None):
+        train_accuracy, train_loss = self.eval(sess, train_eval_size, FLAGS.eval_batch_size, train_eval_fn)
         print("Train Accuracy: {:.3f}".format(train_accuracy))
         print("Train Loss: {:.3f}".format(train_loss))
 
-        if test_fn is not None:
-            test_accuracy, test_loss = self.eval(sess, FLAGS.eval_test_size, FLAGS.eval_test_batch_size, test_fn)
+        if test_eval_fn is not None:
+            test_accuracy, test_loss = self.eval(sess, test_eval_size, FLAGS.eval_batch_size, test_eval_fn)
             print("Test Accuracy: {:.3f}".format(test_accuracy))
             print("Test Loss: {:.3f}".format(test_loss))
 

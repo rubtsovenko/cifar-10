@@ -120,8 +120,39 @@ def maybe_create_tfrecords_train_test():
     if not os.path.exists(tfrecords_dir):
         os.makedirs(tfrecords_dir)
         train_images, train_labels, test_images, test_labels = get_data()
+
         create_tfrecords(tfrecords_dir, train_images, train_labels, 'train')
         create_tfrecords(tfrecords_dir, test_images, test_labels, 'test')
+
+        images, labels = get_small_dataset(train_images, train_labels, size=100, seed=1)
+        create_tfrecords(tfrecords_dir, images, labels, 'train_overfit_100')
+
+        images, labels = get_small_dataset(train_images, train_labels, size=1000, seed=1)
+        create_tfrecords(tfrecords_dir, images, labels, 'train_overfit_1000')
+
+        images, labels = get_small_dataset(train_images, train_labels, size=1000, seed=2)
+        create_tfrecords(tfrecords_dir, images, labels, 'train_eval_1000')
+
+        images, labels = get_small_dataset(test_images, test_labels, size=1000, seed=2)
+        create_tfrecords(tfrecords_dir, images, labels, 'test_eval_1000')
+
+
+def get_small_dataset(full_images, full_labels, size, seed):
+    np.random.seed(seed)
+    indexes = np.random.permutation(range(full_labels.shape[0]))
+    full_images = full_images[indexes]
+    full_labels = full_labels[indexes]
+
+    images = np.zeros((size, 32, 32, 3), dtype=np.float32)
+    labels = np.zeros(size, dtype=np.int32)
+    size_per_label = size // 10
+
+    for label in range(10):
+        images_temp = full_images[full_labels == label][:size_per_label]
+        images[size_per_label * label:size_per_label * (label + 1), :] = images_temp
+        labels[size_per_label * label:size_per_label * (label + 1)] = (np.repeat(label, size_per_label))
+
+    return images, labels
 
 
 # mode is on of 'train', 'test'
