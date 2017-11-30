@@ -15,7 +15,7 @@ tf.app.flags.DEFINE_integer(
     'num_epochs', 90,
     'Number of training epochs.')
 tf.app.flags.DEFINE_string(
-    'trunk', 'net_4',
+    'trunk', 'net_2',
     'Name of the network\'s trunk, one of "net_1", "net_2", "net_3", "net_4", "resnet20".')
 tf.app.flags.DEFINE_float(
     'decay_bn', 0.999,

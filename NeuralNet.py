@@ -21,14 +21,14 @@ class CifarNeuralNet(object):
 
         set_random_seed()
         self.X, self.y_, self.filenames, self.augment, self.batch_size, self.num_epochs, self.iterator = network_input()
-        self.is_train = tf.placeholder(tf.bool)
+        self.is_train = tf.placeholder(tf.bool, name='is_train')
 
         self.y_logits_op = build_trunk(self.X, self.is_train)
-        self.loss_vector_op, self.loss_op = add_loss(self.y_, self.y_logits_op)
+        self.loss_vector_op, self.loss_op = add_loss(self.y_logits_op, self.y_)
         with tf.name_scope('softmax'):
             self.y_preds_op = tf.nn.softmax(self.y_logits_op)
-        self.correct_preds_op = tf.equal(tf.argmax(self.y_preds_op, 1), tf.argmax(self.y_, 1))
         with tf.name_scope('accuracy'):
+            self.correct_preds_op = tf.equal(tf.argmax(self.y_preds_op, 1), tf.argmax(self.y_, 1))
             self.accuracy_op = tf.reduce_mean(tf.cast(self.correct_preds_op, tf.float32))
 
         self.optimizer_op = add_optimizer()
@@ -69,6 +69,7 @@ class CifarNeuralNet(object):
         num_batches = int(np.ceil(train_size) / FLAGS.train_batch_size)
 
         if self.global_step.eval() == 0:
+            graph_writer = tf.summary.FileWriter(os.path.join(FLAGS.summary_dir, 'graph'), sess.graph)
             self.track_performance(sess, 0, train_eval_fn, train_eval_size, test_eval_fn, test_eval_size)
 
         for epoch in range(FLAGS.ckpt + 1, FLAGS.ckpt + 1 + FLAGS.num_epochs):
@@ -184,10 +185,10 @@ def data_augmentation(image, label, augment):
 
 def network_input():
     with tf.name_scope('input'):
-        filenames = tf.placeholder(tf.string, shape=[None])
-        augment = tf.placeholder(tf.bool)
-        batch_size = tf.placeholder(tf.int64)
-        num_epochs = tf.placeholder(tf.int64)
+        filenames = tf.placeholder(tf.string, shape=[None], name='filenames')
+        augment = tf.placeholder(tf.bool, name='augment')
+        batch_size = tf.placeholder(tf.int64, name='batch_size')
+        num_epochs = tf.placeholder(tf.int64, name='num_epochs')
 
         dataset = tf.data.TFRecordDataset(filenames)
         dataset = dataset.map(parce_tfrecord, num_parallel_calls=FLAGS.num_threads)
@@ -221,7 +222,7 @@ def build_trunk(X, is_train):
     return y_logits
 
 
-def add_loss(y_, y_logits):
+def add_loss(y_logits, y_):
     with tf.name_scope('loss'):
         loss_vector = tf.nn.softmax_cross_entropy_with_logits(logits=y_logits, labels=y_)
         cross_entropy = tf.reduce_mean(loss_vector)

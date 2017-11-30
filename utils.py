@@ -66,7 +66,8 @@ def flatten_3d(input, name):
 
 
 def prob_close(is_train, prob):
-    return 1-tf.cast(is_train, tf.float32)*prob
+    with tf.name_scope('dropout_controller'):
+        return 1-tf.cast(is_train, tf.float32)*prob
 
 
 def conv_bn_relu(x, filters, kernel, stride, scope):
@@ -78,7 +79,7 @@ def conv_bn_relu(x, filters, kernel, stride, scope):
 
 
 def residual_unit(x, filters, scope, change_dim):
-    with tf.variable_scope(scope):
+    with tf.name_scope(scope):
         if change_dim:
             shortcut = slim.conv2d(x, filters, [1, 1], stride=2, scope='match_shortcut')
             stride = 2
