@@ -1,10 +1,12 @@
 import os
 import tensorflow as tf
-import numpy as np
 
 # ============================================================================================================ #
 # General Flags
 # ============================================================================================================ #
+tf.app.flags.DEFINE_string(
+    'run_mode', 'train',
+    'One of train, overfit_100, overfit_1000, predict')
 tf.app.flags.DEFINE_string(
     'run_name', 'run_1',
     'Create a new folder for the experiment with a set name')
@@ -12,13 +14,13 @@ tf.app.flags.DEFINE_integer(
     'ckpt', 0,
     'Restore model from the checkpoint, 0 - restore from the latest one or from scratch if no ckpts.')
 tf.app.flags.DEFINE_integer(
-    'num_epochs', 90,
+    'num_epochs', 200,
     'Number of training epochs.')
 tf.app.flags.DEFINE_string(
-    'trunk', 'net_2',
+    'trunk', 'resnet20',
     'Name of the network\'s trunk, one of "net_1", "net_2", "net_3", "net_4", "resnet20".')
 tf.app.flags.DEFINE_float(
-    'decay_bn', 0.999,
+    'decay_bn', 0.9,
     'decay parameter for batch normalization layers')
 tf.app.flags.DEFINE_integer(
     'num_threads', 8,
@@ -26,7 +28,7 @@ tf.app.flags.DEFINE_integer(
 
 # batch settings
 tf.app.flags.DEFINE_integer(
-    'train_batch_size', 100,
+    'train_batch_size', 256,
     'Mini-batch size')
 tf.app.flags.DEFINE_integer(
     'eval_batch_size', 500,
@@ -42,17 +44,12 @@ tf.app.flags.DEFINE_integer(
     'save_freq', 1,
     'Save model\'s parameters every n iterations.')
 
-# train mode
-tf.app.flags.DEFINE_string(
-    'train_mode', 'train',
-    'One of train, overfit_100, overfit_1000')
-
 
 # ============================================================================================================ #
 # Optimization Flags
 # ============================================================================================================ #
 tf.app.flags.DEFINE_string(
-    'optimizer', 'adam',
+    'optimizer', 'momentum',
     'Name of the optimizer, one of "sgd", "momentum", "adam", "rmsprop".')
 tf.app.flags.DEFINE_float(
     'momentum', 0.9,
@@ -75,7 +72,7 @@ tf.app.flags.DEFINE_float(
 
 # learning rate
 tf.app.flags.DEFINE_float(
-    'learning_rate', 0.001,
+    'learning_rate', 0.1,
     'Initial learning rate.')
 
 # weight decay regularization

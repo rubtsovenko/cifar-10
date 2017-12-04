@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tqdm import tqdm
 from config import FLAGS
-from architectures import net_1, net_2, net_3, net_4, resnet20
+from architectures import net_1, net_2, net_3, net_4, resnet20, resnet20_preact
 import numpy as np
 import os
 import tensorlayer
@@ -38,6 +38,7 @@ class CifarNeuralNet(object):
             self.init_op = tf.global_variables_initializer()
 
         self.saver = tf.train.Saver(max_to_keep=100)
+        tf.get_default_graph().finalize()
 
     def load_or_init(self, sess):
         self.logger.info('INITIALIZATION:')
@@ -76,7 +77,7 @@ class CifarNeuralNet(object):
             sess.run(self.iterator.initializer, {self.filenames: train_fn,
                                                  self.batch_size: FLAGS.train_batch_size,
                                                  self.num_epochs: 1,
-                                                 self.augment: False})
+                                                 self.augment: True})
             for _ in tqdm(range(num_batches), desc='Epoch {:3d}'.format(epoch)):
                 sess.run(self.train_op, {self.is_train: True})
                 #print(sess.run(self.accuracy_op, {self.is_train: False}))
@@ -85,7 +86,7 @@ class CifarNeuralNet(object):
             #print(sess.run(self.accuracy_op, {self.is_train: False}))
             #print(sess.run(self.loss_op, {self.is_train: False}))
 
-            self.track_performance(sess, 0, train_eval_fn, train_eval_size, test_eval_fn, test_eval_size)
+            self.track_performance(sess, epoch, train_eval_fn, train_eval_size, test_eval_fn, test_eval_size)
             if epoch % FLAGS.save_freq == 0:
                 self.saver.save(sess, FLAGS.ckpt_dir, global_step=epoch)
 
@@ -171,7 +172,7 @@ def train_transform(image):
 
 
 def test_transform(image):
-    image.set_shape([32,32,3])
+    #image.set_shape([32,32,3])
 
     return image
 
@@ -216,6 +217,8 @@ def build_trunk(X, is_train):
         y_logits = net_4(X, is_train)
     elif FLAGS.trunk == 'resnet20':
         y_logits = resnet20(X, is_train)
+    elif FLAGS.trunk == 'resnet20_preact':
+        y_logits = resnet20_preact(X, is_train)
     else:
         raise ValueError('Network architecture {} was not recognized'.format(FLAGS.trunk))
 

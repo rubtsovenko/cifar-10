@@ -1,6 +1,6 @@
 from config import FLAGS
 import tensorflow as tf
-from utils import conv_bn_relu, conv, max_pool, fc, dropout, flatten_3d, prob_close, residual_unit
+from utils import conv_bn_relu, conv, max_pool, fc, dropout, flatten_3d, prob_close, residual_unit, full_preact_unit
 
 slim = tf.contrib.slim
 xavier_conv = slim.xavier_initializer_conv2d()
@@ -132,6 +132,37 @@ def resnet20(x, is_train):
             net = residual_unit(net, filters=64, scope='unit_7', change_dim=True)
             net = residual_unit(net, filters=64, scope='unit_8', change_dim=False)
             net = residual_unit(net, filters=64, scope='unit_9', change_dim=False)
+
+            net = slim.avg_pool2d(net, [8, 8], stride=1, scope='avgpool20')
+            net = slim.flatten(net)
+            net = slim.fully_connected(net, 10, activation_fn=None, scope='fc20')
+    return net
+
+
+def resnet20_preact(x, is_train):
+    with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                        activation_fn=None,
+                        biases_initializer=const_init,
+                        weights_initializer=var_scale,
+                        weights_regularizer=slim.l2_regularizer(FLAGS.weight_decay)):
+        with slim.arg_scope([slim.batch_norm],
+                            decay=FLAGS.decay_bn,
+                            center=True,
+                            scale=True,
+                            is_training=is_train):
+            net = conv_bn_relu(x, filters=16, kernel=3, stride=1, scope='layer_1')
+
+            net = full_preact_unit(net, filters=16, scope='unit_1', change_dim=False)
+            net = full_preact_unit(net, filters=16, scope='unit_2', change_dim=False)
+            net = full_preact_unit(net, filters=16, scope='unit_3', change_dim=False)
+
+            net = full_preact_unit(net, filters=32, scope='unit_4', change_dim=True)
+            net = full_preact_unit(net, filters=32, scope='unit_5', change_dim=False)
+            net = full_preact_unit(net, filters=32, scope='unit_6', change_dim=False)
+
+            net = full_preact_unit(net, filters=64, scope='unit_7', change_dim=True)
+            net = full_preact_unit(net, filters=64, scope='unit_8', change_dim=False)
+            net = full_preact_unit(net, filters=64, scope='unit_9', change_dim=False)
 
             net = slim.avg_pool2d(net, [8, 8], stride=1, scope='avgpool20')
             net = slim.flatten(net)

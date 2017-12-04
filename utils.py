@@ -71,7 +71,7 @@ def prob_close(is_train, prob):
 
 
 def conv_bn_relu(x, filters, kernel, stride, scope):
-    with tf.name_scope(scope):
+    with tf.variable_scope(scope):
         net = slim.conv2d(x, filters, [kernel, kernel], stride, scope='conv')
         net = slim.batch_norm(net, scope='bn')
         net = tf.nn.relu(net, name='relu')
@@ -79,9 +79,18 @@ def conv_bn_relu(x, filters, kernel, stride, scope):
 
 
 def residual_unit(x, filters, scope, change_dim):
-    with tf.name_scope(scope):
+    with tf.variable_scope(scope):
         if change_dim:
+            # projection shortcut
             shortcut = slim.conv2d(x, filters, [1, 1], stride=2, scope='match_shortcut')
+
+            # padding shortcut
+            #shortcut = slim.max_pool2d(x, [1,1], stride=2)
+            #shortcut = slim.avg_pool2d(x, [2,2], stride=2)
+            #pad_dim = int(shortcut.get_shape()[3])
+            #paddings = tf.constant([[0, 0], [0, 0], [0, 0], [pad_dim // 2, pad_dim // 2]])
+            #shortcut = tf.pad(shortcut, paddings, "CONSTANT")
+
             stride = 2
         else:
             shortcut = tf.identity(x, name='iden_shortcut')
@@ -96,7 +105,31 @@ def residual_unit(x, filters, scope, change_dim):
     return net
 
 
+def full_preact_unit(x, filters, scope, change_dim):
+    with tf.variable_scope(scope):
+        if change_dim:
+            # projection shortcut
+            shortcut = slim.conv2d(x, filters, [1, 1], stride=2, scope='match_shortcut')
 
+            # padding shortcut
+            #shortcut = slim.max_pool2d(x, [1,1], stride=2)
+            #shortcut = slim.avg_pool2d(x, [2,2], stride=2)
+            #pad_dim = int(shortcut.get_shape()[3])
+            #paddings = tf.constant([[0, 0], [0, 0], [0, 0], [pad_dim // 2, pad_dim // 2]])
+            #shortcut = tf.pad(shortcut, paddings, "CONSTANT")
+
+            stride = 2
+        else:
+            shortcut = tf.identity(x, name='iden_shortcut')
+            stride = 1
+        net = slim.batch_norm(x, scope='bn1')
+        net = tf.nn.relu(net, name='relu1')
+        net = slim.conv2d(net, filters, [3, 3], stride, scope='conv1')
+        net = slim.batch_norm(net, scope='bn2')
+        net = tf.nn.relu(net, name='relu2')
+        net = slim.conv2d(net, filters, [3, 3], 1, scope='conv2')
+        net = tf.add(net, shortcut, name='merge')
+    return net
 
 
 
