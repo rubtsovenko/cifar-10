@@ -176,7 +176,7 @@ def create_tfrecords(data_path, images, labels, mode):
             'label': _int64_feature(label),
             'image_raw': _bytes_feature(image_raw)}))
 
-        # Serialize to string and write on the file
+        # Serialize to string and write to the file
         writer.write(example.SerializeToString())
 
     writer.close()
